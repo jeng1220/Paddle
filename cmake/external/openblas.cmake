@@ -22,7 +22,7 @@ IF(NOT WIN32)
         CACHE FILEPATH "openblas library." FORCE)
     SET(CBLAS_INC_DIR "${CBLAS_INSTALL_DIR}/include" CACHE PATH "openblas include directory." FORCE)
     SET(OPENBLAS_CC "${CMAKE_C_COMPILER} -Wno-unused-but-set-variable -Wno-unused-variable")
-    SET(OPENBLAS_COMMIT "v0.2.20")
+    SET(OPENBLAS_COMMIT "v0.3.7")
 
     IF(APPLE)
         SET(OPENBLAS_CC "${CMAKE_C_COMPILER} -isysroot ${CMAKE_OSX_SYSROOT}")
