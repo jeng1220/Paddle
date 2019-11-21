@@ -15,7 +15,7 @@
 INCLUDE(ExternalProject)
 # Always invoke `FIND_PACKAGE(Protobuf)` for importing function protobuf_generate_cpp
 IF(NOT WIN32)
-FIND_PACKAGE(Protobuf QUIET)
+    FIND_PACKAGE(Protobuf QUIET)
 ENDIF(NOT WIN32)
 macro(UNSET_VAR VAR_NAME)
     UNSET(${VAR_NAME} CACHE)
@@ -209,6 +209,7 @@ FUNCTION(build_protobuf TARGET_NAME BUILD_FOR_HOST)
     ExternalProject_Add(
         ${TARGET_NAME}
         ${EXTERNAL_PROJECT_LOG_ARGS}
+        ${SHALLOW_CLONE}
         PREFIX          ${PROTOBUF_SOURCES_DIR}
         UPDATE_COMMAND  ""
         DEPENDS         zlib

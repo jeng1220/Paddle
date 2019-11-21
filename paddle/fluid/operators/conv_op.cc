@@ -50,30 +50,28 @@ void ConvOp::InferShape(framework::InferShapeContext* ctx) const {
   const std::string data_format = ctx->Attrs().Get<std::string>("data_format");
   const bool channel_last = (data_format == "NHWC" || data_format == "NDHWC");
 
-  PADDLE_ENFORCE_EQ(in_dims.size() == 4 || in_dims.size() == 5, true,
-                    "ShapeError: Conv input should be 4-D or 5-D tensor. But "
-                    "received: %u-D Tensor,"
-                    "the shape of Conv input is [%s]",
-                    in_dims.size(), in_dims);
+  PADDLE_ENFORCE_EQ(
+      in_dims.size() == 4 || in_dims.size() == 5, true,
+      "ShapeError: the input of Op(conv) should be 4-D or 5-D Tensor. But "
+      "received: %u-D Tensor, the shape of input is [%s].",
+      in_dims.size(), in_dims);
 
   PADDLE_ENFORCE_EQ(
       in_dims.size(), filter_dims.size(),
-      "ShapeError: Conv input dimension and filter dimension should be the "
-      "equal."
-      "But received: the shape of Conv input is [%s], input dimension of Conv "
-      "input is [%d],"
-      "the shape of filter is [%s],  the filter dimension of Conv is [%d]",
+      "ShapeError: the input's dimension size and filter's dimension size of "
+      "Op(conv) should be equal. But received: the shape of input is [%s], "
+      "the dimension size of input is [%d], the shape of filter is [%s],  "
+      "the dimension size of filter is [%d].",
       in_dims, in_dims.size(), filter_dims, filter_dims.size());
 
   int in_sub_stride_size = in_dims.size() - strides.size();
   PADDLE_ENFORCE_EQ(in_dims.size() - strides.size() == 2U, true,
-                    "ShapeError: the dimension of input minus the dimension of "
-                    "stride must be euqal to 2."
-                    "But received: the dimension of input minus the dimension "
-                    "of stride is [%d], the"
-                    "input dimension of Conv is [%d], the shape of Conv input "
-                    "is [%s], the stride"
-                    "dimension of Conv is [%d]",
+                    "ShapeError: the dimension size of input minus the size of "
+                    "Attr(stride) must be euqal to 2 for Op(conv)."
+                    "But received: the dimension size of input minus the size "
+                    "of Attr(stride) is [%d], the "
+                    "input's dimension size is [%d], the shape of input "
+                    "is [%s], the Attr(stride)'s size is [%d].",
                     in_sub_stride_size, in_dims.size(), in_dims,
                     strides.size());
 
@@ -83,16 +81,19 @@ void ConvOp::InferShape(framework::InferShapeContext* ctx) const {
   PADDLE_ENFORCE_EQ(
       input_channels, filter_dims[1] * groups,
       "ShapeError: The number of input channels should be equal to filter "
-      "channels * groups. But received: the input channels is [%d], the shape"
-      "of input is [%s], the filter channel is [%d], the shape of filter is "
-      "[%s],"
-      "the groups is [%d]",
-      in_dims[1], in_dims, filter_dims[1], filter_dims, groups);
+      "channels * groups for Op(conv). But received: the input's channels is "
+      "[%d], the shape "
+      "of input is [%s], the filter's channel is [%d], the shape of filter is "
+      "[%s], the groups is [%d], the data_format is %s. The error may come "
+      "from wrong data_format setting.",
+      input_channels, in_dims, filter_dims[1], filter_dims, groups,
+      data_format);
   PADDLE_ENFORCE_EQ(
       filter_dims[0] % groups, 0,
-      "ShapeError: The number of output channels should be divided by groups."
-      "But received: the output channels is [%d], the shape of filter is [%s]"
-      "(the first dimension of filter is output channel), the groups is [%d]",
+      "ShapeError: The number of output channels of Op(conv) should be divided "
+      "by groups. "
+      "But received: the output channels is [%d], the shape of filter is [%s] "
+      "(the first dimension of filter is output channel), the groups is [%d].",
       filter_dims[0], filter_dims, groups);
 
   framework::DDim in_data_dims;
@@ -548,48 +549,50 @@ framework::OpKernelType ConvOpGrad::GetExpectedKernelType(
   return type;
 }
 
-class Conv2DGradMaker : public framework::SingleGradOpDescMaker {
+template <typename T>
+class Conv2DGradMaker : public framework::SingleGradOpMaker<T> {
  public:
-  using framework::SingleGradOpDescMaker::SingleGradOpDescMaker;
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
 
-  std::unique_ptr<framework::OpDesc> Apply() const override {
-    auto* op = new framework::OpDesc();
+  std::unique_ptr<T> Apply() const override {
+    auto* op = new T();
     op->SetType(this->ForwardOpType() + "_grad");
-    op->SetInput("Input", Input("Input"));
-    op->SetInput("Filter", Input("Filter"));
-    op->SetInput("Bias", Input("Bias"));
-    op->SetInput(framework::GradVarName("Output"), OutputGrad("Output"));
+    op->SetInput("Input", this->Input("Input"));
+    op->SetInput("Filter", this->Input("Filter"));
+    op->SetInput("Bias", this->Input("Bias"));
+    op->SetInput(framework::GradVarName("Output"), this->OutputGrad("Output"));
 
-    op->SetOutput(framework::GradVarName("Input"), InputGrad("Input"));
-    op->SetOutput(framework::GradVarName("Filter"), InputGrad("Filter"));
-    op->SetOutput(framework::GradVarName("Bias"), InputGrad("Bias"));
-    op->SetAttrMap(Attrs());
+    op->SetOutput(framework::GradVarName("Input"), this->InputGrad("Input"));
+    op->SetOutput(framework::GradVarName("Filter"), this->InputGrad("Filter"));
+    op->SetOutput(framework::GradVarName("Bias"), this->InputGrad("Bias"));
+    op->SetAttrMap(this->Attrs());
 
-    return std::unique_ptr<framework::OpDesc>(op);
+    return std::unique_ptr<T>(op);
   }
 };
 
-class Conv3DGradMaker : public framework::SingleGradOpDescMaker {
+template <typename T>
+class Conv3DGradMaker : public framework::SingleGradOpMaker<T> {
  public:
-  using framework::SingleGradOpDescMaker::SingleGradOpDescMaker;
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
 
-  std::unique_ptr<framework::OpDesc> Apply() const override {
-    auto* op = new framework::OpDesc();
+  std::unique_ptr<T> Apply() const override {
+    auto* op = new T();
     op->SetType(this->ForwardOpType() + "_grad");
-    op->SetInput("Input", Input("Input"));
-    op->SetInput("Filter", Input("Filter"));
-    op->SetInput(framework::GradVarName("Output"), OutputGrad("Output"));
+    op->SetInput("Input", this->Input("Input"));
+    op->SetInput("Filter", this->Input("Filter"));
+    op->SetInput(framework::GradVarName("Output"), this->OutputGrad("Output"));
 
-    op->SetOutput(framework::GradVarName("Input"), InputGrad("Input"));
-    op->SetOutput(framework::GradVarName("Filter"), InputGrad("Filter"));
+    op->SetOutput(framework::GradVarName("Input"), this->InputGrad("Input"));
+    op->SetOutput(framework::GradVarName("Filter"), this->InputGrad("Filter"));
 
-    if (ForwardOp().Inputs().count("ResidualData") != 0) {
-      op->SetInput("ResidualData", Input("ResidualData"));
+    if (this->HasInput("ResidualData")) {
+      op->SetInput("ResidualData", this->Input("ResidualData"));
     }
 
-    op->SetAttrMap(Attrs());
+    op->SetAttrMap(this->Attrs());
 
-    return std::unique_ptr<framework::OpDesc>(op);
+    return std::unique_ptr<T>(op);
   }
 };
 
@@ -597,37 +600,40 @@ class Conv3DGradMaker : public framework::SingleGradOpDescMaker {
  * Inputs:  I, W, dO, ddI, ddW
  * Outputs: ddO, dW, dI
  */
-class Conv2DDoubleGradMaker : public framework::SingleGradOpDescMaker {
+template <typename T>
+class Conv2DDoubleGradMaker : public framework::SingleGradOpMaker<T> {
  public:
-  using framework::SingleGradOpDescMaker::SingleGradOpDescMaker;
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
 
-  std::unique_ptr<framework::OpDesc> Apply() const override {
-    auto* op = new framework::OpDesc();
+  std::unique_ptr<T> Apply() const override {
+    auto* op = new T();
     op->SetType(this->ForwardOpType() + "_grad");
     // I, W, dO, ddI, ddW
-    op->SetInput("Input", Input("Input"));
-    op->SetInput("Filter", Input("Filter"));
-    op->SetInput("DOutput", Input(framework::GradVarName("Output")));
-    op->SetInput("DDInput", OutputGrad(framework::GradVarName("Input")));
-    op->SetInput("DDFilter", OutputGrad(framework::GradVarName("Filter")));
+    op->SetInput("Input", this->Input("Input"));
+    op->SetInput("Filter", this->Input("Filter"));
+    op->SetInput("DOutput", this->Input(framework::GradVarName("Output")));
+    op->SetInput("DDInput", this->OutputGrad(framework::GradVarName("Input")));
+    op->SetInput("DDFilter",
+                 this->OutputGrad(framework::GradVarName("Filter")));
 
     // ddO, dI, dW
     // Unlike grad op, double grad op does not use name@GRAD@GRAD
     // as key of ops' inputs and outputs.
-    auto ddx = OutputGrad(framework::GradVarName("Input"));
-    auto ddw = OutputGrad(framework::GradVarName("Filter"));
-    std::vector<std::string> empty_str = {};
+    auto ddx = this->OutputGrad(framework::GradVarName("Input"));
+    auto ddw = this->OutputGrad(framework::GradVarName("Filter"));
 
     op->SetOutput("DDOutput",
-                  (ddx.empty() && ddw.empty())
-                      ? empty_str
-                      : InputGrad(framework::GradVarName("Output")));
-    op->SetOutput("DFilter", ddx.empty() ? empty_str : InputGrad("Filter"));
-    op->SetOutput("DInput", ddw.empty() ? empty_str : InputGrad("Input"));
+                  ddx.empty()
+                      ? this->Empty()
+                      : this->InputGrad(framework::GradVarName("Output")));
+    op->SetOutput("DFilter",
+                  ddx.empty() ? this->Empty() : this->InputGrad("Filter"));
+    op->SetOutput("DInput",
+                  ddw.empty() ? this->Empty() : this->InputGrad("Input"));
 
-    op->SetAttrMap(Attrs());
+    op->SetAttrMap(this->Attrs());
 
-    return std::unique_ptr<framework::OpDesc>(op);
+    return std::unique_ptr<T>(op);
   }
 };
 
@@ -635,34 +641,37 @@ class Conv2DDoubleGradMaker : public framework::SingleGradOpDescMaker {
  * Inputs:  I, W, dO, ddI, ddW
  * Outputs: ddO, dW, dI
  */
-class Conv3DDoubleGradMaker : public framework::SingleGradOpDescMaker {
+template <typename T>
+class Conv3DDoubleGradMaker : public framework::SingleGradOpMaker<T> {
  public:
-  using framework::SingleGradOpDescMaker::SingleGradOpDescMaker;
+  using framework::SingleGradOpMaker<T>::SingleGradOpMaker;
 
-  std::unique_ptr<framework::OpDesc> Apply() const override {
-    auto* op = new framework::OpDesc();
+  std::unique_ptr<T> Apply() const override {
+    auto* op = new T();
     op->SetType(this->ForwardOpType() + "_grad");
     // I, W, dO, ddI, ddW
-    op->SetInput("Input", Input("Input"));
-    op->SetInput("Filter", Input("Filter"));
-    op->SetInput("DOutput", Input(framework::GradVarName("Output")));
-    op->SetInput("DDInput", OutputGrad(framework::GradVarName("Input")));
-    op->SetInput("DDFilter", OutputGrad(framework::GradVarName("Filter")));
+    op->SetInput("Input", this->Input("Input"));
+    op->SetInput("Filter", this->Input("Filter"));
+    op->SetInput("DOutput", this->Input(framework::GradVarName("Output")));
+    op->SetInput("DDInput", this->OutputGrad(framework::GradVarName("Input")));
+    op->SetInput("DDFilter",
+                 this->OutputGrad(framework::GradVarName("Filter")));
 
-    auto ddx = OutputGrad(framework::GradVarName("Input"));
-    auto ddw = OutputGrad(framework::GradVarName("Filter"));
-    std::vector<std::string> empty_str = {};
+    auto ddx = this->OutputGrad(framework::GradVarName("Input"));
+    auto ddw = this->OutputGrad(framework::GradVarName("Filter"));
 
     op->SetOutput("DDOutput",
-                  (ddx.empty() && ddw.empty())
-                      ? empty_str
-                      : InputGrad(framework::GradVarName("Output")));
-    op->SetOutput("DFilter", ddx.empty() ? empty_str : InputGrad("Filter"));
-    op->SetOutput("DInput", ddw.empty() ? empty_str : InputGrad("Input"));
+                  ddx.empty()
+                      ? this->Empty()
+                      : this->InputGrad(framework::GradVarName("Output")));
+    op->SetOutput("DFilter",
+                  ddx.empty() ? this->Empty() : this->InputGrad("Filter"));
+    op->SetOutput("DInput",
+                  ddw.empty() ? this->Empty() : this->InputGrad("Input"));
 
-    op->SetAttrMap(Attrs());
+    op->SetAttrMap(this->Attrs());
 
-    return std::unique_ptr<framework::OpDesc>(op);
+    return std::unique_ptr<T>(op);
   }
 };
 
@@ -734,18 +743,28 @@ framework::OpKernelType ConvOpDoubleGrad::GetExpectedKernelType(
 
 namespace ops = paddle::operators;
 REGISTER_OPERATOR(conv2d, ops::ConvOp, ops::Conv2DOpMaker,
-                  ops::ConvOpInferVarType, ops::Conv2DGradMaker);
-REGISTER_OPERATOR(conv2d_grad, ops::ConvOpGrad, ops::Conv2DDoubleGradMaker);
+                  ops::ConvOpInferVarType,
+                  ops::Conv2DGradMaker<paddle::framework::OpDesc>,
+                  ops::Conv2DGradMaker<paddle::imperative::OpBase>);
+REGISTER_OPERATOR(conv2d_grad, ops::ConvOpGrad,
+                  ops::Conv2DDoubleGradMaker<paddle::framework::OpDesc>,
+                  ops::Conv2DDoubleGradMaker<paddle::imperative::OpBase>);
 REGISTER_OPERATOR(conv2d_grad_grad, ops::ConvOpDoubleGrad);
 
 // depthwise convolution op
 REGISTER_OPERATOR(depthwise_conv2d, ops::ConvOp, ops::Conv2DOpMaker,
-                  ops::ConvOpInferVarType, ops::Conv2DGradMaker);
+                  ops::ConvOpInferVarType,
+                  ops::Conv2DGradMaker<paddle::framework::OpDesc>,
+                  ops::Conv2DGradMaker<paddle::imperative::OpBase>);
 REGISTER_OPERATOR(depthwise_conv2d_grad, ops::ConvOpGrad);
 
 REGISTER_OPERATOR(conv3d, ops::ConvOp, ops::Conv3DOpMaker,
-                  ops::ConvOpInferVarType, ops::Conv3DGradMaker);
-REGISTER_OPERATOR(conv3d_grad, ops::ConvOpGrad, ops::Conv3DDoubleGradMaker);
+                  ops::ConvOpInferVarType,
+                  ops::Conv3DGradMaker<paddle::framework::OpDesc>,
+                  ops::Conv3DGradMaker<paddle::imperative::OpBase>);
+REGISTER_OPERATOR(conv3d_grad, ops::ConvOpGrad,
+                  ops::Conv3DDoubleGradMaker<paddle::framework::OpDesc>,
+                  ops::Conv3DDoubleGradMaker<paddle::imperative::OpBase>);
 REGISTER_OPERATOR(conv3d_grad_grad, ops::ConvOpDoubleGrad);
 
 // depthwise conv kernel
