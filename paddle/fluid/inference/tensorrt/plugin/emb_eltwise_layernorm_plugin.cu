@@ -53,6 +53,21 @@ int EmbEltwiseLayernormPluginDynamic<T>::initialize() {
                cudaMemcpyHostToDevice);
   }
 
+  int input_num = embs_.size();
+  in_ptr_tensor_.Resize({input_num});
+  emb_ptr_tensor_.Resize({input_num});
+
+  std::vector<uintptr_t> emb_ptr;
+  for (int i = 0; i < input_num; i++) {
+    emb_ptr.push_back(reinterpret_cast<uintptr_t>(embs_gpu_[i]));
+  }
+
+  cudaGetDevice(&device_id_);
+  auto emb_ptr_gpu_d =
+        emb_ptr_tensor_.mutable_data<int64_t>(platform::CUDAPlace(device_id_));
+  cudaMemcpy(emb_ptr_gpu_d, emb_ptr.data(), sizeof(uintptr_t) * input_num,
+             cudaMemcpyHostToDevice);
+
   return 0;
 }
 
@@ -142,27 +157,24 @@ int EmbEltwiseLayernormPluginDynamic<T>::enqueue(
   int seq_len = id_dims.d[1];
   int input_num = embs_.size();
 
-  framework::Tensor in_ptr_tensor, emb_ptr_tensor;
-  int device_id;
-  cudaGetDevice(&device_id);
+  auto in_ptr_gpu_d =
+        in_ptr_tensor_.mutable_data<int64_t>(platform::CUDAPlace(device_id_));
+  auto emb_ptr_gpu_d =
+        emb_ptr_tensor_.mutable_data<int64_t>(platform::CUDAPlace(device_id_));
 
-  in_ptr_tensor.Resize({input_num});
-  emb_ptr_tensor.Resize({input_num});
-  int64_t *in_ptr_gpu_d =
-      in_ptr_tensor.mutable_data<int64_t>(platform::CUDAPlace(device_id));
-  int64_t *emb_ptr_gpu_d =
-      emb_ptr_tensor.mutable_data<int64_t>(platform::CUDAPlace(device_id));
+  auto new_input_ptr = reinterpret_cast<uintptr_t>(inputs[0]);
 
-  std::vector<int64_t> in_ptr, emb_ptr;
-  for (int i = 0; i < input_num; i++) {
-    in_ptr.push_back(reinterpret_cast<uintptr_t>(inputs[i]));
-    emb_ptr.push_back(reinterpret_cast<uintptr_t>(embs_gpu_[i]));
+  if (old_input_ptr_ != new_input_ptr) {
+    old_input_ptr_ = new_input_ptr;
+
+    std::vector<uintptr_t> in_ptr;
+    for (int i = 0; i < input_num; i++) {
+      in_ptr.push_back(reinterpret_cast<uintptr_t>(inputs[i]));
+    }
+
+    cudaMemcpyAsync(in_ptr_gpu_d, in_ptr.data(), sizeof(uintptr_t) * input_num,
+        cudaMemcpyHostToDevice, stream);
   }
-
-  cudaMemcpyAsync(in_ptr_gpu_d, in_ptr.data(), sizeof(int64_t) * input_num,
-                  cudaMemcpyHostToDevice, stream);
-  cudaMemcpyAsync(emb_ptr_gpu_d, emb_ptr.data(), sizeof(int64_t) * input_num,
-                  cudaMemcpyHostToDevice, stream);
 
   auto out_type = output_desc[0].type;
 
