@@ -145,7 +145,7 @@ class StackPluginV2Creator : public nvinfer1::IPluginCreator {
   nvinfer1::PluginFieldCollection field_collection_{0, nullptr};
   std::vector<nvinfer1::PluginField> plugin_attributes_;
 };
-REGISTER_TRT_PLUGIN_V2(StackPluginV2Creator);
+REGISTER_TENSORRT_PLUGIN(StackPluginV2Creator);
 #endif
 
 }  // namespace plugin
